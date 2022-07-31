@@ -1,99 +1,64 @@
 const express = require("express");
 const jwt = require("jsonwebtoken");
+const { v4: uuidv4 } = require("uuid");
+const { getUserByEmail, getUserByJWT } = require("../middleware/auth.js");
 
 const authRouter = express.Router();
 const authTable = "cuttr-auth";
 
-authRouter.post("/signup", (req, res) => {
+authRouter.post("/signup", getUserByEmail, (req, res) => {
 	const ddb = req.ddb;
-	const uuid = req.body.id;
+	const uuid = uuidv4();
+	const { email, username, password, phone, client } = req.body;
 
-	var params = {
-		TableName: authTable,
-		Item: {
-			uuid: { S: uuid },
-			name: { S: uuid },
-		},
-	};
+	if (!req.user) {
+		const signUp = {
+			TableName: authTable,
+			Item: {
+				uuid: { S: uuid },
+				email: { S: email },
+				username: { S: username },
+				password: { S: password },
+				phone: { N: phone.toString() },
+				client: { BOOL: client },
+			},
+		};
 
-	ddb.putItem(params, (err, data) => {
-		if (err) res.set(`[${process.pid}] ${err}`);
-		else res.set(`[${process.pid}] ${data}`);
-	});
+		ddb.putItem(signUp, (err, data) => {
+			if (err) {
+				console.error(`[${process.pid}] ${err}`);
+				res.status(500).send("Server error");
+			} else res.status(200).send("User created");
+		});
+	} else {
+		res.status(403).send({ error: "User Exists" });
+	}
 });
 
-// authRouter.post("/login", (req, res) => {
-// 	const { email, password } = req.body;
-// 	User.findOne({ email }, (err, user) => {
-// 		if (err) {
-// 			console.error(err);
-// 			res.status(500).json({
-// 				error: "Internal error please try again",
-// 			});
-// 		} else if (!user) {
-// 			res.status(401).json({
-// 				error: "Incorrect email or password",
-// 			});
-// 		} else if (user.verifyPassword(password)) {
-// 			const payload = { email };
-// 			const token = jwt.sign(payload, process.env.JWT_SECRET, {
-// 				expiresIn: "1h",
-// 			});
-// 			res.cookie("token", token, { httpOnly: true }).sendStatus(200);
-// 		} else {
-// 			res.status(401).json({
-// 				error: "Incorrect email or password",
-// 			});
-// 		}
-// 	});
-// });
+authRouter.post("/login", getUserByEmail, (req, res) => {
+	const { password } = req.body;
 
-// authRouter.post("/register", function (req, res) {
-// 	const { email, password, firstName, lastName } = req.body;
-// 	const user = new User({ email, password, firstName, lastName, points: 0 });
-// 	user.save(function (err) {
-// 		if (err) {
-// 			console.error(err);
-// 			res.status(500).send("Server error, try again");
-// 		} else {
-// 			res.status(200).send("New user registered");
-// 		}
-// 	});
-// });
+	if (!req.user) {
+		res.status(401).json({
+			error: "Account does not exist",
+		});
+	} else if (req.user.password.S === password) {
+		const payload = req.user.uuid;
+		const token = jwt.sign({ payload }, process.env.JWT_SECRET, {
+			expiresIn: "1h",
+		});
 
-// authRouter.post("/logout", withAuth, function (req, res) {
-// 	const email = req.email;
-// 	User.findOne({ email }, (err, user) => {
-// 		if (err) {
-// 			console.error(err);
-// 			res.status(500).json({
-// 				error: "Internal error please try again",
-// 			});
-// 		} else {
-// 			res
-// 				.cookie("token", "", { httpOnly: true, expires: new Date() })
-// 				.sendStatus(200);
-// 		}
-// 	});
-// });
+		res.status(200).send({ token: token });
+	} else {
+		res.status(401).json({
+			error: "Incorrect email or password",
+		});
+	}
+});
 
-// authRouter.get("/verifyToken", withAuth, function (req, res) {
-// 	const email = req.email;
-// 	User.findOne({ email }, (err, user) => {
-// 		user = user.toObject();
-// 		delete user.password;
-// 		res.status(200).json(user);
-// 	});
-// });
-
-// authRouter.get("/:id", function (req, res) {
-// 	const id = mongoose.Types.ObjectId(req.params.id.trim());
-
-// 	User.findById({ _id: id }, (err, user) => {
-// 		user = user.toObject();
-// 		delete user.password;
-// 		res.status(200).json(user);
-// 	});
-// });
+authRouter.get("/data", getUserByJWT, (req, res) => {
+	console.log(req.user);
+	res.status(200).send(req.user);
+});
 
 module.exports = authRouter;

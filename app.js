@@ -20,6 +20,9 @@ if (cluster.isMaster) {
 	const app = express();
 	app.use(express.json());
 	app.use(withDDB);
+	const http = require("http").Server(app);
+	const io = require("socket.io")(http);
+	app.set(io);
 
 	app.get("/", (req, res) => {
 		res.send("Cuttr API");
@@ -27,7 +30,7 @@ if (cluster.isMaster) {
 	app.use("/auth/", auth);
 
 	const port = process.env.PORT || 3000;
-	app.listen(port, function () {
+	http.listen(port, function () {
 		console.log(`[${process.pid}] Listening on port ${port}`);
 	});
 }
