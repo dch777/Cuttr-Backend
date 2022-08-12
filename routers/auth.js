@@ -57,6 +57,12 @@ authRouter.post("/login", getUserByEmail, (req, res) => {
 	}
 });
 
+authRouter.get("/logout", getUserByJWT, (req, res) => {
+	res
+		.cookie("token", "", { httpOnly: true, expires: new Date() })
+		.sendStatus(200);
+});
+
 authRouter.get("/data", getUserByJWT, (req, res) => {
 	res.status(200).send(req.user);
 });
