@@ -69,7 +69,11 @@ const getUserByJWT = (req, res, next) => {
 
 const validateClient = (req, res, next) => {
 	const { client } = req.user;
-	if (client.BOOL) {
+	const { uuid } = req.user;
+	if (!req.user) {
+		res.status(401).set("Not logged in");
+	} else if (!req.line && client.BOOL) {
+		req.owner_id = uuid.S;
 		next();
 	} else {
 		res.status(403).set("Must be client to access");
@@ -78,11 +82,18 @@ const validateClient = (req, res, next) => {
 
 const validateCustomer = (req, res, next) => {
 	const { client } = req.user;
-	if (!client.BOOL) {
+	if (!req.user) {
+		res.status(401).set("Not logged in");
+	} else if (!client.BOOL) {
 		next();
 	} else {
 		res.status(403).set("Must be customer to access");
 	}
 };
 
-module.exports = { getUserByEmail, getUserByJWT };
+module.exports = {
+	getUserByEmail,
+	getUserByJWT,
+	validateClient,
+	validateCustomer,
+};

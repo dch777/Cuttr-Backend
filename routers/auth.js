@@ -9,7 +9,7 @@ const authTable = "cuttr-auth";
 authRouter.post("/signup", getUserByEmail, (req, res) => {
 	const ddb = req.ddb;
 	const uuid = uuidv4();
-	const { email, username, password, phone, client } = req.body;
+	const { email, username, password, phone, address, client } = req.body;
 
 	if (!req.user) {
 		const signUp = {
@@ -20,6 +20,7 @@ authRouter.post("/signup", getUserByEmail, (req, res) => {
 				username: { S: username },
 				password: { S: password },
 				phone: { N: phone.toString() },
+				address: { S: address },
 				client: { BOOL: client },
 			},
 		};
@@ -48,7 +49,7 @@ authRouter.post("/login", getUserByEmail, (req, res) => {
 			expiresIn: "1h",
 		});
 
-		res.status(200).send({ token: token });
+		res.cookie("token", token, { httpOnly: true }).sendStatus(200);
 	} else {
 		res.status(401).json({
 			error: "Incorrect email or password",
@@ -57,7 +58,6 @@ authRouter.post("/login", getUserByEmail, (req, res) => {
 });
 
 authRouter.get("/data", getUserByJWT, (req, res) => {
-	console.log(req.user);
 	res.status(200).send(req.user);
 });
 
