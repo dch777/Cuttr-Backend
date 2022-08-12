@@ -40,7 +40,7 @@ authRouter.post("/login", getUserByEmail, (req, res) => {
 	const { password } = req.body;
 
 	if (!req.user) {
-		res.status(401).json({
+		res.status(401).send({
 			error: "Account does not exist",
 		});
 	} else if (req.user.password.S === password) {
@@ -51,7 +51,7 @@ authRouter.post("/login", getUserByEmail, (req, res) => {
 
 		res.cookie("token", token, { httpOnly: true }).sendStatus(200);
 	} else {
-		res.status(401).json({
+		res.status(401).send({
 			error: "Incorrect email or password",
 		});
 	}

@@ -69,25 +69,23 @@ const getUserByJWT = (req, res, next) => {
 
 const validateClient = (req, res, next) => {
 	const { client } = req.user;
-	const { uuid } = req.user;
 	if (!req.user) {
-		res.status(401).set("Not logged in");
-	} else if (!req.line && client.BOOL) {
-		req.owner_id = uuid.S;
+		res.status(401).send("Not logged in");
+	} else if (client.BOOL) {
 		next();
 	} else {
-		res.status(403).set("Must be client to access");
+		res.status(403).send("Must be client to access");
 	}
 };
 
 const validateCustomer = (req, res, next) => {
 	const { client } = req.user;
 	if (!req.user) {
-		res.status(401).set("Not logged in");
+		res.status(401).send("Not logged in");
 	} else if (!client.BOOL) {
 		next();
 	} else {
-		res.status(403).set("Must be customer to access");
+		res.status(403).send("Must be customer to access");
 	}
 };
 

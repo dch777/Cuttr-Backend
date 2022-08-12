@@ -34,7 +34,7 @@ linesRouter.get("/:id", getLine, (req, res) => {
 linesRouter.post("/add", validateClient, (req, res) => {
 	const ddb = req.ddb;
 	const uuid = uuidv4();
-	const owner_id = req.owner_id;
+	const owner_id = req.user.uuid;
 	const { address, lat, long } = req.body;
 
 	const addLineParams = {
@@ -86,7 +86,7 @@ linesRouter.get("/:id/advance", [getLine, validateClient], (req, res) => {
 	const advanceLineParams = {
 		TableName: linesTable,
 		Key: {
-			hash_key: uuid,
+			uuid: { S: uuid },
 		},
 		UpdateExpression: "REMOVE customers[0]",
 		ReturnValues: "ALL_NEW",
@@ -98,7 +98,7 @@ linesRouter.get("/:id/advance", [getLine, validateClient], (req, res) => {
 			res.status(500).send({ error: "Server Error" });
 		} else if (data.Attributes) {
 			io.emit(`line-${uuid}-update`, data.Attributes);
-			res.status(200).send("Advanced Line line");
+			res.status(200).send("Advanced line");
 		} else {
 			res.status(401).send({ error: "Not found" });
 		}
@@ -148,7 +148,7 @@ linesRouter.get("/:id/leave", [getLine, validateCustomer], (req, res) => {
 	// const joinLineParams = {
 	// 	TableName: linesTable,
 	// 	Key: {
-	// 		hash_key: uuid,
+	// 		uuid: uuid,
 	// 	},
 	// 	UpdateExpression: "SET customers = list_append(some_attr, :c)",
 	// 	ExpressionAttributeValues: {
