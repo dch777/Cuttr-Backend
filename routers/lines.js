@@ -34,7 +34,7 @@ linesRouter.get("/:id", getLine, (req, res) => {
 linesRouter.post("/add", validateClient, (req, res) => {
 	const ddb = req.ddb;
 	const uuid = uuidv4();
-	const owner_id = req.user.uuid;
+	const owner_id = req.user.uuid.S;
 	const { address, lat, long } = req.body;
 
 	const addLineParams = {
@@ -57,7 +57,36 @@ linesRouter.post("/add", validateClient, (req, res) => {
 	});
 });
 
-linesRouter.post("/:id/edit", [getLine, validateClient], (req, res) => {});
+linesRouter.post("/:id/update", [getLine, validateClient], (req, res) => {
+	const ddb = req.ddb;
+	const io = req.app.get("io");
+	const uuid = req.params.id;
+	const new_line = req.body.line;
+
+	const updateLineParams = {
+		TableName: linesTable,
+		Key: {
+			uuid: { S: uuid },
+		},
+		UpdateExpression: "SET customers = :c",
+		ExpressionAttributeValues: {
+			":c": { L: new_line },
+		},
+		ReturnValues: "ALL_NEW",
+	};
+
+	ddb.updateItem(updateLineParams, (err, data) => {
+		if (err) {
+			console.error(`[${process.pid}] ${err}`);
+			res.status(500).send({ error: "Server Error" });
+		} else if (data.Attributes) {
+			io.emit(`line-${uuid}-update`, data.Attributes);
+			res.status(200).send("Updated line");
+		} else {
+			res.status(401).send({ error: "Not found" });
+		}
+	});
+});
 
 linesRouter.post("/:id/delete", [getLine, validateClient], (req, res) => {
 	const ddb = req.ddb;
@@ -78,10 +107,10 @@ linesRouter.post("/:id/delete", [getLine, validateClient], (req, res) => {
 	});
 });
 
-linesRouter.get("/:id/advance", [getLine, validateClient], (req, res) => {
+linesRouter.post("/:id/advance", [getLine, validateClient], (req, res) => {
 	const ddb = req.ddb;
-	const uuid = req.params.id;
 	const io = req.app.get("io");
+	const uuid = req.params.id;
 
 	const advanceLineParams = {
 		TableName: linesTable,
@@ -105,15 +134,52 @@ linesRouter.get("/:id/advance", [getLine, validateClient], (req, res) => {
 	});
 });
 
-linesRouter.get("/:id/kick", [getLine, validateClient], (req, res) => {});
+linesRouter.post("/:id/kick", [getLine, validateClient], (req, res) => {
+	const ddb = req.ddb;
+	const io = req.app.get("io");
+	const uuid = req.params.id;
+	const customer_id = req.body.customer_id;
+	const customers = req.line.customers.L.map((customer) => customer.S);
+	const idx = customers.indexOf(customer_id);
+
+	if (idx === -1) {
+		return res.status(401).send("Customer not in line");
+	}
+
+	const kickLineParams = {
+		TableName: linesTable,
+		Key: {
+			uuid: { S: uuid },
+		},
+		UpdateExpression: `REMOVE customers[${idx}]`,
+		ReturnValues: "ALL_NEW",
+	};
+
+	ddb.updateItem(kickLineParams, (err, data) => {
+		if (err) {
+			console.error(`[${process.pid}] ${err}`);
+			res.status(500).send({ error: "Server Error" });
+		} else if (data.Attributes) {
+			io.emit(`line-${uuid}-update`, data.Attributes);
+			res.status(200).send("Customer kicked");
+		} else {
+			res.status(401).send({ error: "Not found" });
+		}
+	});
+});
 
 linesRouter.get("/locate", validateCustomer, (req, res) => {});
 
-linesRouter.get("/:id/join", [getLine, validateCustomer], (req, res) => {
+linesRouter.post("/:id/join", [getLine, validateCustomer], (req, res) => {
 	const ddb = req.ddb;
-	const uuid = req.params.id;
-	const customer_id = req.user.uuid;
 	const io = req.app.get("io");
+	const customers = req.line.customers.L.map((customer) => customer.S);
+	const uuid = req.params.id;
+	const customer_id = req.user.uuid.S;
+
+	if (customers.includes(customer_id)) {
+		return res.status(200).send("Customer already in line");
+	}
 
 	const joinLineParams = {
 		TableName: linesTable,
@@ -122,7 +188,7 @@ linesRouter.get("/:id/join", [getLine, validateCustomer], (req, res) => {
 		},
 		UpdateExpression: "SET customers = list_append(customers, :c)",
 		ExpressionAttributeValues: {
-			":c": { L: [customer_id] },
+			":c": { L: [{ S: customer_id }] },
 		},
 		ReturnValues: "ALL_NEW",
 	};
@@ -140,33 +206,41 @@ linesRouter.get("/:id/join", [getLine, validateCustomer], (req, res) => {
 	});
 });
 
-linesRouter.get("/:id/leave", [getLine, validateCustomer], (req, res) => {
+linesRouter.post("/:id/leave", [getLine, validateCustomer], (req, res) => {
 	const ddb = req.ddb;
-	// const uuid = req.params.id;
-	// const io = req.app.get("io");
-	// const { customer_id } = req.user;
-	// const joinLineParams = {
-	// 	TableName: linesTable,
-	// 	Key: {
-	// 		uuid: uuid,
-	// 	},
-	// 	UpdateExpression: "SET customers = list_append(some_attr, :c)",
-	// 	ExpressionAttributeValues: {
-	// 		":c": [customer_id],
-	// 	},
-	// 	ReturnValues: "ALL_NEW",
-	// };
-	// ddb.updateItem(joinLineParams, (err, data) => {
-	// 	if (err) {
-	// 		console.error(`[${process.pid}] ${err}`);
-	// 		res.status(500).send({ error: "Server Error" });
-	// 	} else if (data.Attributes) {
-	// 		io.emit(`line-${uuid}-update`, data.Attributes);
-	// 		res.status(200).send("Left line");
-	// 	} else {
-	// 		res.status(404).send({ error: "Not found" });
-	// 	}
-	// });
+	const io = req.app.get("io");
+	const uuid = req.params.id;
+	const customer_id = req.user.uuid.S;
+	const customers = req.line.customers.L.map((customer) => customer.S);
+	const idx = customers.indexOf(customer_id);
+	console.log(customers);
+	console.log(customer_id);
+	console.log(idx);
+
+	if (idx === -1) {
+		return res.status(401).send("Customer not in line");
+	}
+
+	const leaveLineParams = {
+		TableName: linesTable,
+		Key: {
+			uuid: { S: uuid },
+		},
+		UpdateExpression: `REMOVE customers[${idx}]`,
+		ReturnValues: "ALL_NEW",
+	};
+
+	ddb.updateItem(leaveLineParams, (err, data) => {
+		if (err) {
+			console.error(`[${process.pid}] ${err}`);
+			res.status(500).send({ error: "Server Error" });
+		} else if (data.Attributes) {
+			io.emit(`line-${uuid}-update`, data.Attributes);
+			res.status(200).send("Left line");
+		} else {
+			res.status(401).send({ error: "Not found" });
+		}
+	});
 });
 
 module.exports = linesRouter;
